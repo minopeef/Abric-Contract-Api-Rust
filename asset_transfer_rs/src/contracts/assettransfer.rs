@@ -24,7 +24,7 @@ pub struct AssetTransfer {}
 impl Contract for AssetTransfer {
     //! Name of the contract
     fn name(&self) -> String {
-        format!("AssetTransfer")
+        "AssetTransfer".to_string()
     }
 }
 
@@ -126,41 +126,33 @@ impl AssetTransfer {
     ) -> Result<(), ContractError> {
         let world = Ledger::access_ledger().get_collection(CollectionName::World);
 
-        match world.update::<Asset>(Asset::new(id, color, size, owner, appraised_value)) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                return Err(ContractError::from((
-                    "That asset is not found".to_string(),
-                    e,
-                )))
-            }
-        }
+        world.update::<Asset>(Asset::new(id, color, size, owner, appraised_value))
+            .map_err(|e| ContractError::from((
+                "That asset is not found".to_string(),
+                e,
+            )))
     }
 
     #[Transaction(submit)]
     pub fn delete_asset(&self, id: String) -> Result<(), ContractError> {
         let world = Ledger::access_ledger().get_collection(CollectionName::World);
 
-        match world.delete_state(&id) {
-            Err(e) => Err(ContractError::from((
+        world.delete_state(&id)
+            .map_err(|e| ContractError::from((
                 format!("Unable to delete asset {}", id),
                 e,
-            ))),
-            Ok(_) => Ok(()),
-        }
+            )))
     }
 
     #[Transaction(evaluate)]
     pub fn asset_exists(&self, id: String) -> Result<bool, ContractError> {
         let world = Ledger::access_ledger().get_collection(CollectionName::World);
 
-        match world.state_exists(id.as_str()) {
-            Err(e) => Err(ContractError::from((
+        world.state_exists(id.as_str())
+            .map_err(|e| ContractError::from((
                 format!("Unable to check asset {}", id),
                 e,
-            ))),
-            Ok(r) => Ok(r),
-        }
+            )))
     }
 
     #[Transaction(submit)]
@@ -168,16 +160,9 @@ impl AssetTransfer {
         let world = Ledger::access_ledger().get_collection(CollectionName::World);
         let asset = world.retrieve::<Asset>(&id);
 
-        match asset {
-            Ok(mut a) => {
-                a.update_owner(new_owner);
-                world.update::<Asset>(a)?;
-                Ok(())
-            }
-            Err(e) => Err(ContractError::from((
-                format!("Unable to check asset {}", id),
-                e,
-            ))),
-        }
+        let mut asset = world.retrieve::<Asset>(&id)?;
+        asset.update_owner(new_owner);
+        world.update::<Asset>(asset)?;
+        Ok(())
     }
 }
