@@ -21,7 +21,7 @@ impl Contract for AssetTransfer {
 
     //! Name of the contract
     fn name(&self) -> String {
-        format!("AssetTransferPrivate")
+        "AssetTransferPrivate".to_string()
     }
 }
 
@@ -72,10 +72,8 @@ impl AssetTransfer {
         // get the collection that is backed by the world state
         let asset_collection = Ledger::access_ledger().get_collection(CollectionName::World);
 
-        match asset_collection.state_exists(id.as_str()) {
-            Ok(true) => return Err(ContractError::from("Asset id already present".to_string())),
-            Ok(false) => (),
-            Err(e) => return Err(ContractError::from(e)),
+        if asset_collection.state_exists(id.as_str())? {
+            return Err(ContractError::from("Asset id already present".to_string()));
         }
 
         let asset = Asset::new(id, owner_org.clone(), public_description);
@@ -121,10 +119,8 @@ impl AssetTransfer {
         let client_msp = self.get_verified_client_org()?;
 
         let private_collection =
-            Ledger::access_ledger().get_collection(CollectionName::Organization(client_msp));
+            Ledger::access_ledger().get_collection(CollectionName::Organization(client_msp.clone()));
         let asset = private_collection.retrieve::<Asset>(&asset_id)?;
-
-        let client_msp = self.get_verified_client_org()?;
         if asset.get_owner() != client_msp {
             return Err(ContractError::from(
                 "Submitting organization does not own asset".to_string(),
@@ -144,10 +140,8 @@ impl AssetTransfer {
             Ledger::access_ledger().get_collection(CollectionName::Organization(client_msp));
 
         let buy_price = PriceAgreement::new(asset_id, price);
-        match private_collection.create(buy_price) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(ContractError::from(e)),
-        }
+        private_collection.create(buy_price)?;
+        Ok(())
     }
 
     /// Used by a buyer to vlidate that the asset they are planning on buying 
@@ -166,10 +160,10 @@ impl AssetTransfer {
             Ledger::access_ledger().get_collection(CollectionName::Organization(asset.get_owner()));
 
         let state_hash = private_collection.retrieve_state_hash(&asset_id)?;
-        match state_hash.verify_consistent(asset_properties) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(ContractError::from("Unable to verify asset properties".to_string())),
-            Err(e) => Err(ContractError::from(e)),
+        if state_hash.verify_consistent(asset_properties)? {
+            Ok(())
+        } else {
+            Err(ContractError::from("Unable to verify asset properties".to_string()))
         }
     }
 
@@ -198,20 +192,16 @@ impl AssetTransfer {
 
         // 2) Confirm that the private details do indeed match what is recorded
         let state = collection_seller.retrieve_state_hash(&asset_id)?;
-        match state.verify_consistent(asset_properties) {
-            Ok(true) => (),
-            Ok(false) => return Err(ContractError::from("Unable to verify asset properties".to_string())),
-            Err(e) => return Err(ContractError::from(e)),
-        };
+        if !state.verify_consistent(asset_properties)? {
+            return Err(ContractError::from("Unable to verify asset properties".to_string()));
+        }
 
         // 3) Confirm that the prices recorded for buyer and seller match
         let s_hash = collection_seller.retrieve_state_hash(&PriceAgreement::form_key(&asset_id))?;
         let b_hash = collection_buyer.retrieve_state_hash(&PriceAgreement::form_key(&asset_id))?;
-        match s_hash.verify_consistent(b_hash){ 
-            Ok(true) => (), 
-            Ok(false) => return Err(ContractError::from("Unable to verify matching price agreements".to_string())),
-            Err(e) => return Err(ContractError::from(e)),
-        };
+        if !s_hash.verify_consistent(b_hash)? {
+            return Err(ContractError::from("Unable to verify matching price agreements".to_string()));
+        }
 
         // remove these records no longer required
         collection_seller.delete_state(&PriceAgreement::form_key(&asset_id))?;

@@ -85,12 +85,11 @@ impl AssetContract {
 
         // Doing a check to see if the asset exists explicitly.
         // so we can return a business specific result
-        match self.asset_exists(my_assset_id.clone()) {
-            Ok(true) => {
-                let v = world.retrieve::<MyAsset>(&my_assset_id)?.get_value();
-                Ok(v)
-            }
-            _ => Err(ContractError::from(String::from("Unable to find asset"))),
+        if self.asset_exists(my_assset_id.clone())? {
+            let v = world.retrieve::<MyAsset>(&my_assset_id)?.get_value();
+            Ok(v)
+        } else {
+            Err(ContractError::from("Unable to find asset".to_string()))
         }
     }
 
@@ -110,7 +109,7 @@ impl AssetContract {
 
         // Return the count
         let count = all_000.into_iter().count();
-        Ok(format!("Number of 00 agents is {}", count).to_string())
+        Ok(format!("Number of 00 agents is {}", count))
     }
 
     #[Transaction(evaluate)]
